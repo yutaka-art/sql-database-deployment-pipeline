@@ -1,0 +1,44 @@
+trigger:
+- none
+
+variables:
+  serviceConnection: '<your AzDO Service connection>'
+  sqlServerName: '<your SQLDatabase Endpoint>'
+  sqlDatabaseName: '<your SQLDatabase Database name'
+  sqlUsername: '<your SQLDatabase Database User name'
+  sqlPassword: '<your SQLDatabase Database User password'
+
+pool:
+  vmImage: 'windows-latest'
+
+steps:
+# ソリューションをビルドし、DACPACを生成
+- task: VSBuild@1
+  inputs:
+    solution: 'src/Database1/*.sln'  # プロジェクトソリューションを指定
+    msbuildArgs: '/p:Configuration=Release'
+    platform: 'Any CPU'
+
+# 正しいフォルダからDACPACファイルをコピー
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: '$(System.DefaultWorkingDirectory)/src/Database1/Database1/bin/Release'  # DACPACの生成フォルダ
+    Contents: '**/*.dacpac'  # DACPACファイルを指定
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'  # パイプラインの成果物ディレクトリ
+
+# DACPACファイルをパイプライン成果物として公開
+- task: PublishBuildArtifacts@1
+  inputs:
+    pathToPublish: '$(Build.ArtifactStagingDirectory)'
+    artifactName: 'drop'
+    publishLocation: 'Container'
+
+# 生成された DACPAC ファイルをデプロイ
+- task: SqlAzureDacpacDeployment@1
+  inputs:
+    azureSubscription: '$(serviceConnection)'
+    ServerName: '$(sqlServerName)'
+    DatabaseName: '$(sqlDatabaseName)'
+    SqlUsername: '$(sqlUsername)'
+    SqlPassword: '$(sqlPassword)'
+    DacpacFile: '$(Build.ArtifactStagingDirectory)/*.dacpac'  # 成果物パス
